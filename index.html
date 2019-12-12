@@ -6,11 +6,11 @@
 		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
 		<style>
 			body {
-				color: #61443e;
+				color: #000;
 				font-family:Monospace;
 				font-size:13px;
 				text-align:center;
-				background-color: #bfd1e5;
+				background-color: #000;
 				margin: 0px;
 				overflow: hidden;
 			}
@@ -79,18 +79,20 @@
 				renderer = new THREE.WebGLRenderer( { antialias: true } );
 				renderer.setPixelRatio( window.devicePixelRatio );
 				renderer.setSize( window.innerWidth, window.innerHeight );
+                renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 				container.appendChild( renderer.domElement );
 				
                 scene = new THREE.Scene();
-				scene.background = new THREE.Color( 0xbfd1e5 );
-
+				// scene.background = new THREE.Color( 0xbfd1e5 );
+                scene.background = new THREE.Color( 0x000000 );
 
                 /**
                  * create orbit controls and camera
                  */
                 camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 10, 20000 );
 				controls = new THREE.OrbitControls( camera, renderer.domElement );
-				controls.minDistance = 1000;
+				controls.minDistance = 10;
 				controls.maxDistance = 10000;
 				controls.maxPolarAngle = Math.PI / 2;
 				camera.position.y = controls.target.y + 2000;
@@ -101,11 +103,39 @@
                 /**
                  * create ground plane
                  */
-                var geometry = new THREE.PlaneBufferGeometry( 3000, 3000, worldWidth - 1, worldDepth - 1 );
+                // var geometry = new THREE.PlaneBufferGeometry( 3000, 3000, worldWidth - 1, worldDepth - 1 );
+				// geometry.rotateX( - Math.PI / 2 );
+				// mesh = new THREE.Mesh( geometry, new THREE.MeshLambertMaterial( { color: 0xbfd1e5 } ) );
+                var geometry = new THREE.PlaneGeometry(1000, 1000, worldWidth - 1, worldDepth - 1);
+                var material = new THREE.MeshLambertMaterial({color: 0xffff00, side: THREE.DoubleSide});
 				geometry.rotateX( - Math.PI / 2 );
-				mesh = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial( { map: texture } ) );
-				scene.add( mesh );
+                mesh = new THREE.Mesh(geometry, material);
+                // mesh.castShadow = true;
+                mesh.receiveShadow = true;
+				scene.add(mesh);
+
 				
+                /**
+                 * directional light
+                 */
+                var directionalLight = new THREE.DirectionalLight( 0xffffff, 1 );
+                directionalLight.position.set(500, 500, 500);
+                directionalLight.castShadow = true;
+                directionalLight.shadowCameraVisible = true;
+                scene.add( directionalLight );
+                var lightHelper = new THREE.DirectionalLightHelper(directionalLight, 5);
+                scene.add(lightHelper);
+                directionalLight.target = mesh;
+                directionalLight.shadow.mapSize.width = 5000;
+                directionalLight.shadow.mapSize.height = 5000;
+                directionalLight.shadow.camera.left = -1000;
+                directionalLight.shadow.camera.right = 1000;
+                directionalLight.shadow.camera.top = -1000;
+                directionalLight.shadow.camera.bottom = 1000;
+                directionalLight.shadow.camera.near = 1;
+                directionalLight.shadow.camera.far = 2000;
+                console.log(directionalLight);
+                scene.add(new THREE.CameraHelper(directionalLight.shadow.camera));
 
                 /**
                  * raycaster helper geometry
@@ -121,8 +151,9 @@
                  * add sphere to scene
                  */
                 var spheregeometry = new THREE.SphereGeometry( 30, 32, 32 );
-                var spherematerial = new THREE.MeshBasicMaterial( {color: 0xffff00} );
+                var spherematerial = new THREE.MeshLambertMaterial( {color: 0xffff00} );
                 sphere = new THREE.Mesh( spheregeometry, spherematerial );
+                sphere.castShadow = true;
                 scene.add( sphere );
                 sphere.position.set(0, 700, 500);
 
@@ -249,21 +280,31 @@
                 }
                 this.createJoint = function() {
                     var geometry = new THREE.SphereBufferGeometry( 5, 32, 32 );
-                    var material = new THREE.MeshBasicMaterial( {color: this.color} );
+                    var material = new THREE.MeshLambertMaterial( {color: this.color} );
                     var sphere = new THREE.Mesh( geometry, material );
                     sphere.position.set(10, 40, 30);
+                    sphere.castShadow = true;
                     this.position = sphere.position;
                     console.log(sphere);
                     scene.add( sphere );
                 }
                 this.createSegment = function() {
-                    var magnitude = 40;
+                    var magnitude = 200;
                     var direction = new THREE.Vector3(0, magnitude, 0);
                     var position = this.position.clone();
                     var v1 = position;
                     var v2 = this.position.add(direction);
-                    var segment = new THREE.LineCurve(v1, v2);
-                    console.log(segment);
+                    var path1  = new THREE.LineCurve3(v1, v2);
+                    var path2  = new THREE.LineCurve3(new THREE.Vector3(100, 60, 10), new THREE.Vector3(100, 140, 60));
+                    var path3  = new THREE.LineCurve3(new THREE.Vector3(300, 20, 20), new THREE.Vector3(-70, -200, 0));
+                    var pipe = new THREE.CurvePath();
+                    pipe.curves = [path1, path2, path3];
+                    var geometry = new THREE.TubeGeometry(pipe, 20, 2, 8, false);
+                    var material = new THREE.MeshLambertMaterial({color: 0x00ff00});
+                    var mesh = new THREE.Mesh(geometry, material);
+                    mesh.castShadow = true;
+                    console.log(mesh);
+                    scene.add(mesh);
                     // scene.add(segment);
                 }
                 this.init =  function() {
