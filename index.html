@@ -41,6 +41,8 @@
 				document.body.appendChild( WEBGL.getWebGLErrorMessage() );
 			}
             var clock = new THREE.Clock();
+            var delta;
+            var elapsed = 0;
 			var container, stats;
 			var camera, controls, scene, renderer;
 			var mesh, texture;
@@ -226,7 +228,27 @@
 				requestAnimationFrame( animate );
 				render();
 
-                var delta = clock.getDelta();
+                delta = clock.getDelta();
+               
+                // var interval = .5; // seconds 
+                // elapsed += delta;
+                // if(elapsed > interval) {
+                //     elapsed -= interval;
+                //     console.log('interval hit');
+                // }
+                // var roundedElapsedTime = Math.floor(clock.getElapsedTime());
+
+                // animate pipes 
+                pipes.forEach(function(pipe) {
+                    pipe.draw();
+                });
+
+
+
+
+
+
+                // ball movement controlled by player
                 velocity.x *= friction;
                 velocity.z *= friction;
                 if(moveForward){
@@ -271,21 +293,35 @@
             }
 
             function Pipe() {
+                this.start = false;
                 this.position = new THREE.Vector3();
                 this.color = undefined;
+                this.interval = .5; // seconds 
+                this.constraints = {
+                    maxX: 500,
+                    minX: -500,
+                    maxY: 500,
+                    minY: -500,
+                    maxZ: 500,
+                    mini: -500,
+                };
                 this.randColor = function() {
-                    console.log(pipeColors);
                     var index = Math.floor(Math.random()*pipeColors.length);
                     return pipeColors[index];
+                }
+                this.randPosition = function() {
+                    var x = Math.floor((Math.random() * this.constraints.maxX*2) + this.constraints.minX);
+                    var y = Math.floor((Math.random() * this.constraints.maxY*2) + this.constraints.minY);
+                    var z = Math.floor((Math.random() * this.constraints.maxZ*2) + this.constraints.minZ);
+                    return new THREE.Vector3(x,y,z);
                 }
                 this.createJoint = function() {
                     var geometry = new THREE.SphereBufferGeometry( 5, 32, 32 );
                     var material = new THREE.MeshLambertMaterial( {color: this.color} );
                     var sphere = new THREE.Mesh( geometry, material );
-                    sphere.position.set(10, 40, 30);
+                    // sphere.position.set(10, 40, 30);
+                    sphere.position.add(this.position);
                     sphere.castShadow = true;
-                    this.position = sphere.position;
-                    console.log(sphere);
                     scene.add( sphere );
                 }
                 this.createSegment = function() {
@@ -307,10 +343,25 @@
                     scene.add(mesh);
                     // scene.add(segment);
                 }
-                this.init =  function() {
+                this.draw = function() {
+                    if (!this.start) return;
+                    elapsed += delta;
+                    if(elapsed > this.interval) {
+                        elapsed -= this.interval;
+                        this.createSegment();
+                        // this.createJoint();
+                        // console.log('interval hit');
+                    }
+                }
+                this.init = function() {
+                    // random color 
                     this.color = this.randColor();
-                    console.log(this.color);
-                    this.createJoint();
+                    
+                    // random starting position
+                    this.position = this.randPosition();
+
+                    // start drawing
+                    this.start = true;
                 }
                 this.init();
             };
