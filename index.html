@@ -325,16 +325,27 @@
                     scene.add( sphere );
                 }
                 this.createSegment = function() {
-                    var magnitude = 200;
-                    var direction = new THREE.Vector3(0, magnitude, 0);
-                    var position = this.position.clone();
-                    var v1 = position;
-                    var v2 = this.position.add(direction);
-                    var path1  = new THREE.LineCurve3(v1, v2);
-                    var path2  = new THREE.LineCurve3(new THREE.Vector3(100, 60, 10), new THREE.Vector3(100, 140, 60));
-                    var path3  = new THREE.LineCurve3(new THREE.Vector3(300, 20, 20), new THREE.Vector3(-70, -200, 0));
+                    // var direction = new THREE.Vector3(0, magnitude, 0);
+                    // var position = this.position.clone();
+                    // var v1 = position;
+                    // var v2 = this.position.add(direction);
+                    // var path1  = new THREE.LineCurve3(v1, v2);
+                    // var path2  = new THREE.LineCurve3(new THREE.Vector3(100, 60, 10), new THREE.Vector3(100, 140, 60));
+                    // var path3  = new THREE.LineCurve3(new THREE.Vector3(300, 20, 20), new THREE.Vector3(-70, -200, 0));
+                    // pipe.curves = [path1, path2, path3];
+
+
+                    // rotate around x axis
+                    // x, ycosθ - zsinθ, ysinθ + zcosθ
+
+                    // rotate around y axis
+                    // xcosθ + zsinθ, y, -xsinθ + zcosθ 
+                    
+                    // rotate around z axis
+                    // xcosθ - ysinθ, xsinθ + ycosθ, z
+
+                    var magnitude = 100;
                     var pipe = new THREE.CurvePath();
-                    pipe.curves = [path1, path2, path3];
                     var geometry = new THREE.TubeGeometry(pipe, 20, 2, 8, false);
                     var material = new THREE.MeshLambertMaterial({color: 0x00ff00});
                     var mesh = new THREE.Mesh(geometry, material);
