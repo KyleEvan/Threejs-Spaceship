@@ -10,9 +10,11 @@
 				font-family:Monospace;
 				font-size:13px;
 				text-align:center;
-				background-color: #000;
+				/* background-color: #2D3047; */
 				margin: 0px;
 				overflow: hidden;
+                /* background: rgb(106,112,160);
+                background: linear-gradient(180deg, rgba(106,112,160,1) 0%, rgba(45,48,71,1) 100%); */
 			}
 			#info {
 				position: absolute;
@@ -29,25 +31,137 @@
 		<div id="container"><br /><br /><br /><br /><br />Generating world...</div>
 		<div id="info"><a href="http://threejs.org" target="_blank" rel="noopener">three.js</a> - webgl pipes screensaver </div>
 
-		<script src="js/three.js"></script>
+		<script src="js/three/three.js-dev/build/three.js"></script>
 		<script src="js/OrbitControls.js"></script>
 		<script src="js/ImprovedNoise.js"></script>
 		<script src="js/WebGL.js"></script>
-    <script src="js/stats.min.js"></script>
+        <script src="js/stats.min.js"></script>
 		<script src="js/Tween.js"></script>
 
+
+        <script type="x-shader/x-vertex" id="vertexShader">
+
+			varying vec3 vWorldPosition;
+
+			void main() {
+
+				vec4 worldPosition = modelMatrix * vec4( position, 1.0 );
+                vWorldPosition = worldPosition.xyz;
+
+				gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+
+			}
+
+		</script>
+
+		<script type="x-shader/x-fragment" id="fragmentShader">
+
+			uniform vec3 topColor;
+			uniform vec3 bottomColor;
+			uniform float offset;
+			uniform float exponent;
+
+			varying vec3 vWorldPosition;
+
+			void main() {
+
+				float h = normalize( vWorldPosition + offset ).y;
+				gl_FragColor = vec4( mix( bottomColor, topColor, max( pow( max( h, 0.0 ), exponent ), 0.0 ) ), 1.0 );
+
+			}
+
+        </script>
+        
+        <script type="x-shader/x-vertex" id="vertexShader2">
+            precision mediump float;
+			precision mediump int;
+
+			uniform mat4 modelViewMatrix; // optional
+			uniform mat4 projectionMatrix; // optional
+            uniform float time;
+            uniform float size;
+
+            attribute vec3 position;
+            attribute float scale;
+            // attribute vec3 offset;
+            // attribute float delay;
+            attribute float opacity;
+            varying float vOpacity;
+			//attribute vec4 color;
+
+            varying vec3 vPosition;
+            // varying vec4 vColor;
+            // varying float opacity;
+
+			void main()	{
+
+                
+                vOpacity = opacity;
+                vPosition = position;
+                // if (time > delay) {
+                //     vPosition.y -= (time - delay);
+                // }
+                // if (vPosition.y < time ) {
+                //     vPosition.y = position.y;
+                // }
+                vec4 mvPosition = modelViewMatrix * vec4( vPosition, 1.0 );
+                gl_PointSize = 1000.0 * (scale / length(mvPosition.xyz));
+                gl_Position = projectionMatrix * mvPosition;
+
+			}
+        </script>
+        <script type="x-shader/x-fragment" id="fragmentShader2">
+            precision mediump float;
+            uniform float time;
+            // uniform float opacity;
+            vec3 colorA = vec3(1.0,0.388,0.388);
+            vec3 colorB = vec3(1.0,0.74,0.411);
+            varying float vOpacity;
+            // vec3 colorB = vec3(1.000,0.833,0.224);
+            varying vec3 vPosition;
+            // varying float opacity;
+            void main() {
+                if ( length( gl_PointCoord - vec2( 0.5, 0.5 ) ) > 0.475 ) discard;
+
+                vec3 color = vec3(0.0);
+                float pct = abs(sin(time));
+                // Mix uses pct (a value from 0-1) to
+                // mix the two colors
+                // color = mix(colorA, colorB, pct);
+                color = mix(colorA, colorB, vOpacity);
+                gl_FragColor = vec4(color, 1.0);
+            }
+        </script>
+
+
+
 		<script>
+            /**
+             * Color Theme
+             * https://colorhunt.co/palette/178936
+             * Light color: #B397C4
+             *
+             */
+            var meteorColor = 0x8E62A7;
+
+
 			if ( WEBGL.isWebGLAvailable() === false ) {
 				document.body.appendChild( WEBGL.getWebGLErrorMessage() );
 			}
             var clock = new THREE.Clock();
             var delta;
             var elapsed = 0;
-			var container, stats;
-			var camera, controls, scene, renderer;
+			var container,
+                stats,
+			    camera,
+                controls,
+                scene,
+                renderer;
 			var mesh, texture;
-			var worldWidth = 256, worldDepth = 256,
-				worldHalfWidth = worldWidth / 2, worldHalfDepth = worldDepth / 2;
+			var worldWidth = 256,
+                worldDepth = 256,
+				worldHalfWidth = worldWidth / 2,
+                worldHalfDepth = worldDepth / 2;
 			var helper;
 			var raycaster = new THREE.Raycaster();
 			var mouse = new THREE.Vector2();
@@ -59,19 +173,20 @@
             var velocity = new THREE.Vector3(0,0,0);
             var acceleration = 200;
             var friction = .5
-            // var movementSpeed = 200;
-            var pipeColors = [
-                '#02999C',
-                '#FDD659',
-                '#EF5E19',
-                '#969696',
-                '#E93B2D',
-                '#FFD03D',
-                '#CF1F09',
-            ];
-	        var pipes = [];		
-            init();
-			animate();
+            var meteorSystem = undefined;
+            var spaceship = undefined;
+            var meteors = [];
+            var windowFocus = true ;
+            
+            window.onfocus = function() {
+                console.log('treeeuueue');
+                windowFocus = true;
+            }
+            window.onblur = function() {
+                console.log('faaaalse');
+                windowFocus = false;
+            }
+
 			function init() {
                 /**
                  * get container and append threejs renderer
@@ -87,19 +202,10 @@
 				
                 scene = new THREE.Scene();
 				// scene.background = new THREE.Color( 0xbfd1e5 );
-                scene.background = new THREE.Color( 0x000000 );
+                // scene.background = new THREE.Color( 0x2D3047);
+                scene.fog = new THREE.FogExp2( 0x202040, 0.00915 );
 
-                /**
-                 * create orbit controls and camera
-                 */
-                camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 10, 20000 );
-				controls = new THREE.OrbitControls( camera, renderer.domElement );
-				controls.minDistance = 10;
-				controls.maxDistance = 10000;
-				controls.maxPolarAngle = Math.PI / 2;
-				camera.position.y = controls.target.y + 2000;
-				camera.position.x = 2000;
-				controls.update();
+                
                 
 
                 /**
@@ -108,26 +214,28 @@
                 // var geometry = new THREE.PlaneBufferGeometry( 3000, 3000, worldWidth - 1, worldDepth - 1 );
 				// geometry.rotateX( - Math.PI / 2 );
 				// mesh = new THREE.Mesh( geometry, new THREE.MeshLambertMaterial( { color: 0xbfd1e5 } ) );
-                var geometry = new THREE.PlaneGeometry(1000, 1000, worldWidth - 1, worldDepth - 1);
-                var material = new THREE.MeshLambertMaterial({color: 0xffff00, side: THREE.DoubleSide});
-				geometry.rotateX( - Math.PI / 2 );
-                mesh = new THREE.Mesh(geometry, material);
-                // mesh.castShadow = true;
-                mesh.receiveShadow = true;
-				scene.add(mesh);
+            //    var geometry = new THREE.PlaneGeometry(1000, 1000, worldWidth - 1, worldDepth - 1);
+            //    var material = new THREE.MeshLambertMaterial({color: 0xffff00, side: THREE.DoubleSide});
+			//	geometry.rotateX( - Math.PI / 2 );
+            //    mesh = new THREE.Mesh(geometry, material);
+            //    // mesh.castShadow = true;
+            //    mesh.receiveShadow = true;
+			//	scene.add(mesh);
+                var light = new THREE.HemisphereLight( 0xF2F2F8, 0x202040 );
+                light.position.set(0, 0, 100);
+                scene.add(light);
 
-				
                 /**
                  * directional light
                  */
-                var directionalLight = new THREE.DirectionalLight( 0xffffff, 1 );
-                directionalLight.position.set(500, 500, 500);
+                var directionalLight = new THREE.DirectionalLight( 0x202040, 1 );
+                directionalLight.position.set(-500, 500, 50);
                 directionalLight.castShadow = true;
                 directionalLight.shadowCameraVisible = true;
                 scene.add( directionalLight );
                 var lightHelper = new THREE.DirectionalLightHelper(directionalLight, 5);
                 scene.add(lightHelper);
-                directionalLight.target = mesh;
+                // directionalLight.target = mesh;
                 directionalLight.shadow.mapSize.width = 5000;
                 directionalLight.shadow.mapSize.height = 5000;
                 directionalLight.shadow.camera.left = -1000;
@@ -139,42 +247,605 @@
                 console.log(directionalLight);
                 scene.add(new THREE.CameraHelper(directionalLight.shadow.camera));
 
+
+
+
+                // SKYDOME
+
+                var vertexShader = document.getElementById( 'vertexShader' ).textContent;
+				var fragmentShader = document.getElementById( 'fragmentShader' ).textContent;
+				var uniforms = {
+					topColor: { value: new THREE.Color( 0x202040 ) },
+					bottomColor: { value: new THREE.Color( 0x543864 ) },
+					offset: { value: 100 },
+					exponent: { value: 2 }
+				};
+				uniforms.topColor.value.copy( directionalLight.color );
+
+				var skyGeo = new THREE.SphereBufferGeometry( 300, 32, 15 );
+				var skyMat = new THREE.ShaderMaterial( {
+					uniforms: uniforms,
+					vertexShader: vertexShader,
+					fragmentShader: fragmentShader,
+					side: THREE.BackSide
+				} );
+
+				var sky = new THREE.Mesh( skyGeo, skyMat );
+				scene.add( sky );
+
                 /**
                  * raycaster helper geometry
-                 */
                 var geometry = new THREE.ConeBufferGeometry( 20, 100, 3 );
 				geometry.translate( 0, 50, 0 );
 				geometry.rotateX( Math.PI / 2 );
 				helper = new THREE.Mesh( geometry, new THREE.MeshNormalMaterial() );
 				scene.add( helper );
-
-
-                /**
-                 * add sphere to scene
                  */
-                var spheregeometry = new THREE.SphereGeometry( 30, 32, 32 );
-                var spherematerial = new THREE.MeshLambertMaterial( {color: 0xffff00} );
-                sphere = new THREE.Mesh( spheregeometry, spherematerial );
-                sphere.castShadow = true;
-                scene.add( sphere );
-                sphere.position.set(0, 700, 500);
 
-                /**
-                 * init pipes
-                 */
-                addPipe();
-                pipes.forEach(function(pipe) {
-                    console.log(pipe);
-                    pipe.createSegment();
-                });
-                
-                
+
+                // addSphere(scene);
+
+
                 // Stats
 				stats = new Stats();
 				container.appendChild( stats.dom );
 
+                addHelpers();
+
+                meteorSystem = createMeteorSystem(scene);
+                
+                spaceship = new Spaceship();
+                spaceship.create();
+
+                addPoints(scene); 
+
+                addCamera();
+                
+                initEvents();     
+
+
+			} // end init
+
+            
+			function onWindowResize() {
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+				renderer.setSize( window.innerWidth, window.innerHeight );
+			}
+
+            function addHelpers() {
+                var axesHelper = new THREE.AxesHelper( 5 );
+                scene.add( axesHelper );
+            }
+
+
+			function animate() {
+				requestAnimationFrame( animate );
+				
+
+
+                render();
+                delta = clock.getDelta();
+
+                // Rotate meteor rings
+                var rotSpeed = .003;
+                for (var r = 0; r < meteorSystem.length; r++) {
+                    var ring = meteorSystem[r];
+                    ring.rotation.z += rotSpeed;
+                    rotSpeed -= .001;
+                }
+
+                // console.log(meteors);
+                for (var m = 0; m < meteors.length; m++) {
+                    meteors[m].update();
+                }
+
+                if (spaceship !== undefined) {
+                    spaceship.update(clock.getElapsedTime());
+                }
+               
+            // ball movement controlled by player
+            //    velocity.x *= friction;
+            //    velocity.z *= friction;
+            //    if(moveForward){
+            //      // sphere.position.x -= movementSpeed*delta;
+            //      velocity.x -= acceleration * delta;
+            //    }
+            //    if(moveBackward){
+            //      // sphere.position.x += movementSpeed*delta;
+            //      velocity.x += acceleration * delta;
+            //    }
+            //    if(moveRight){
+            //      // sphere.position.z -= movementSpeed*delta;
+            //      velocity.z -= acceleration * delta;
+            //    }
+            //    if(moveLeft){
+            //      velocity.z += acceleration * delta;
+            //    }
+            //    sphere.position.x += velocity.x;
+            //    sphere.position.z += velocity.z;
+
+				stats.update();
+			}
+			function render() {
+				renderer.render( scene, camera );
+			}
+			function onMouseMove( event ) {
+				mouse.x = ( event.clientX / renderer.domElement.clientWidth ) * 2 - 1;
+				mouse.y = - ( event.clientY / renderer.domElement.clientHeight ) * 2 + 1;
+				raycaster.setFromCamera( mouse, camera );
+				// See if the ray from the camera into the world hits one of our meshes
+				var intersects = raycaster.intersectObject( mesh );
+				// Toggle rotation bool for meshes that we clicked
+				/**
+                if ( intersects.length > 0 ) {
+					helper.position.set( 0, 0, 0 );
+					helper.lookAt( intersects[ 0 ].face.normal );
+					helper.position.copy( intersects[ 0 ].point );
+				}
+                */
+			}
+
+            function addPoints(scene) {
+                var geometry = new THREE.Geometry();
+                var pointsCount = 400;
+                for (var i = 0; i < pointsCount; i++) {
+                    var u1 = Math.random();
+                    var u2 = Math.random();
+                    var n = Math.acos(2*u1 - 1) - (Math.PI/2);
+                    var theta = 2*Math.PI*u2;
+                    var x = (Math.cos(n)*Math.cos(theta))*100;
+                    var y = (Math.cos(n)*Math.sin(theta))*100;
+                    var z = (Math.sin(n))*100;
+                    var point = new THREE.Vector3(x, y, z);
+                    // console.log(point); 
+
+             
+                    // create an array of vertices by way of
+                    // and array of vector3 instances
+                    geometry.vertices.push(point);
+                     
+                    //        new THREE.Vector3(0, 0, 0),
+                    //        new THREE.Vector3(1, 0, 0),
+                    //        new THREE.Vector3(1, 1, 0),
+                    //        new THREE.Vector3(0, 1, 0),
+                    // 
+                    //        new THREE.Vector3(0, 0, -1),
+                    //        new THREE.Vector3(1, 0, -1),
+                    //        new THREE.Vector3(1, 1, -1),
+                    //        new THREE.Vector3(0, 1, -1));
+             
+                    // create faces by way of an array of
+                    // face3 instances. (you just play connect
+                    // the dots with index values from the
+                    // vertices array)
+                    // geometry.faces.push(
+                    //  
+                    //         new THREE.Face3(0, 1, 2),
+                    //         new THREE.Face3(3, 0, 2),
+                    //         new THREE.Face3(4, 5, 6),
+                    //         new THREE.Face3(7, 4, 6),
+                    //  
+                    //         new THREE.Face3(0, 4, 1),
+                    //         new THREE.Face3(1, 4, 5),
+                    //         new THREE.Face3(3, 7, 2),
+                    //         new THREE.Face3(2, 7, 6));
+                } 
+                // compute Normals
+                //geometry.computeVertexNormals();
+            //console.log(geometry); 
+                // normalize the geometry
+                //geometry.normalize();
+                //var material = new THREE.MeshPhongMaterial( { color: 0x888888 } ); 
+                var material = new THREE.PointsMaterial();
+                // MESH with GEOMETRY, and Normal MATERIAL
+               scene.add(new THREE.Points(
+                   // geometry as first argument
+                   geometry,
+                   material 
+               ));
+
+            }
+
+            var Spaceship = function() {
+                this.mesh = undefined;
+                this.position = {
+                    x: 0,
+                    y: 0,
+                    z: 0
+                };
+                this.exhaustLight = undefined;
+                this.exhaustOffset = {
+                    x: 0,
+                    y: -1.5,
+                    z: 0
+                };
+                // this.exhaustParticles = [];
+
+                // Exhaust Particles
+                // this.particleMesh = undefined;
+                this.particleUniforms = {
+                    time: { value: 1.0 },
+                    opacity: { value: 1.0 }
+                };
+                // this.maxParticles = 30;
+                this.particleInstances = 100;
+                this.particleVelocity = .125;
+                this.particleSpawnRadius = .2;
+                this.particleMaxDist = 5;
+                this.particleMinDist = 7;
+                // this.particleLifespan = 1;
+                // this.particlesArr = [];
+                this.particles = undefined;
+
+                this.create = function() {
+                    var spheregeometry = new THREE.SphereGeometry( 1, 6, 6 );
+                    var spherematerial = new THREE.MeshLambertMaterial( {color: 0xf58819} );
+                    this.mesh = new THREE.Mesh( spheregeometry, spherematerial );
+                    this.mesh.castShadow = true;
+                    this.mesh.position.set(this.position.x, this.position.y, this.position.z);
+                    this.createExhaust();
+                    scene.add( this.mesh );
+
+                }
+                this.update = function(t) {
+                    /**
+                     * Update spaceship position
+                     */
+                    // y = 4 sin (2x +1)
+                    var amplitude = .5;
+                    var newX = amplitude*Math.sin((2*t + 1));
+                    this.position.x = newX;
+                    this.mesh.position.set(this.position.x, this.position.y, this.position.z);
+                    this.particleUniforms.time.value += delta;
+
+
+                    /**
+                     * Updates for exhaust particles
+                     */
+                    var positions = this.particles.geometry.attributes.position.array;
+				    var scales = this.particles.geometry.attributes.scale.array;
+                    var maxDists = this.particles.geometry.attributes.maxDist.array;
+                    var opacities = this.particles.geometry.attributes.opacity.array;
+
+                    // Iterate through each particle instance
+                    for (var i = 0; i < this.particleInstances; i++) {
+                        var p = i*3;
+                        var x = p;
+                        var y = p + 1;
+                        var z = p + 2;
+                        
+                        positions[y] -= this.particleVelocity;
+                        var dist = this.exhaustOffset.y - positions[y];
+
+                        // If particle reaches max distance, reset its position and size
+                        if (dist > maxDists[i]) {
+                            var randomAngle = (2*Math.PI)*Math.random();
+                            positions[y] = this.exhaustOffset.y;
+                            positions[x] = this.position.x + this.particleSpawnRadius * Math.cos(randomAngle);
+                            positions[z] = this.position.z + this.particleSpawnRadius * Math.sin(randomAngle);
+                            dist = this.exhaustOffset.y - positions[y];
+                        }
+
+                        var distSize = .25 + dist/maxDists[i];
+                        scales[i] = 2 * distSize;
+                        var opacity = 1.5 - distSize;
+                        opacities[i] = Math.round(opacity*100)/100;
+                        // opacities[i] = 1.0;
+
+                    }
+
+                    this.particles.geometry.attributes.position.needsUpdate = true;
+                    this.particles.geometry.attributes.scale.needsUpdate = true;
+                    this.particles.geometry.attributes.opacity.needsUpdate = true;
+                }
+                this.createExhaust = function() {
+                    var bulbGeometry = new THREE.SphereBufferGeometry( .3, 16, 8 );
+                    this.exhaustLight = new THREE.PointLight( 0xffbd69, 1, 0, 2 );
+                    bulbMat = new THREE.MeshBasicMaterial( {
+                        color: 0xffbd69,
+                        emissive: 0xffbd69,
+                        emissiveIntensity: 1,
+                        uniforms: this.particleUniforms,
+                        // vertexShader: document.getElementById( 'vertexShader2' ).textContent,
+                        // fragmentShader: document.getElementById( 'fragmentShader2' ).textContent,
+                        side: THREE.DoubleSide,
+                        transparent: true,
+                    });
+                    this.exhaustLight.add( new THREE.Mesh( bulbGeometry, bulbMat ) );
+                    this.exhaustLight.position.set( 0, this.exhaustOffset.y, 0 );
+                    this.exhaustLight.castShadow = true;
+                    // this.mesh.add( this.exhaustLight );
+                    var sphereSize = 1;
+                    var pointLightHelper = new THREE.PointLightHelper( this.exhaustLight, sphereSize );
+                    // scene.add( pointLightHelper );
+
+
+                    /**
+                     * init particles
+                     */
+                    var origin = this.exhaustLight.position;
+                    var positions = [];
+                    // var delays = new Float32Array( this.particleInstances );
+                    var scales = new Float32Array( this.particleInstances );
+                    var maxDists = new Float32Array( this.particleInstances );
+                    var opacities = new Float32Array( this.particleInstances );
+                    for (var i = 0; i < this.particleInstances; i++) {
+
+                        // max distances
+                        var maxDist = ((this.particleMaxDist - this.particleMinDist) * Math.random()) + this.particleMinDist;
+                        var randomDist = maxDist*Math.random();
+                        maxDists[i] = maxDist;
+                        // maxDists[i] = this.particleMaxDist * Math.random();
+                        // var dist =  maxDists[i];
+                        // positions
+                        var randomAngle = (2*Math.PI)*Math.random();
+                        var x = origin.x + this.particleSpawnRadius * Math.cos(randomAngle);
+                        var z = origin.z + this.particleSpawnRadius * Math.sin(randomAngle);
+
+                        // random y position
+                        var y = origin.y - randomDist;
+                        positions.push(x, y, z);
+
+                        // scales
+                        var distSize = randomDist/maxDists[i];
+                        scales[i] = 1.2 + distSize;
+
+                        // opacity
+                        var opacity = 1 - distSize;
+                        opacities[i] = Math.round(opacity*100)/100;
+                        // opacities[i] = 1.0;
+                    }
+
+                    var geometry = new THREE.BufferGeometry();
+                    geometry.setAttribute( 'position', new THREE.BufferAttribute( new Float32Array(positions), 3 ) );
+                    geometry.setAttribute( 'scale', new THREE.BufferAttribute( scales, 1 ) );
+                    geometry.setAttribute( 'maxDist', new THREE.BufferAttribute( maxDists, 1 ) );
+                    geometry.setAttribute( 'opacity', new THREE.BufferAttribute( opacities, 1 ) );
+                    // var material = new THREE.PointsMaterial({color: 0xf58819, side: THREE.DoubleSide});
+                    var material = new THREE.RawShaderMaterial( {
+                        uniforms: this.particleUniforms,
+                        vertexShader: document.getElementById( 'vertexShader2' ).textContent,
+                        fragmentShader: document.getElementById( 'fragmentShader2' ).textContent,
+                        side: THREE.DoubleSide,
+                        transparent: true,
+                        // sizeAttenuation: false,
+                        // size: .5
+                    });
+                    console.log(material);
+                    this.particles = new THREE.Points( geometry, material );
+                    console.log(this.particles);
+                    scene.add(this.particles);
+
+                }
+                // this.updateExhaust = function() {
+                //     this.particleUniforms.time.value += delta;
+
+                //     for (p = 0; p < this.particlesArr.length; p++) {
+                //         var particle = this.particlesArr[p];
+                //         particle.lifespan += delta;
+                //         if (particle.lifespan > particle.delay) {
+                //             if (particle.mesh) {
+                //                 particle.mesh.position.y -= this.particleVelocity;
+                //                 var dist = particle.position.y - particle.mesh.position.y;
+                //                 var distPrcnt = Math.round((dist/particle.maxDist)*100)/100;
+                //                 // console.log(distPrcnt);
+                //                 this.particleUniforms.opacity.value = distPrcnt;
+                //                 particle.mesh.material.uniforms.opacity.value = (1.0 - distPrcnt);
+                //                 // console.log(particle.mesh.material.opacity);
+                //                 // console.log(particle.mesh.material);
+                //                 if (dist > particle.maxDist) {
+                //                     particle.mesh.position.y = particle.position.y;
+                //                     particle.maxDist = this.particleMaxDist * Math.random();
+                //                 }
+                //             } else {
+                //                 var mesh = this.createExhaustParticleMesh(particle);
+                //                 this.particlesArr[p].mesh = mesh;
+                //                 this.mesh.add(mesh);
+                //             }
+                //         }
+                //     }
+                // }
+                // this.createExhaustParticles = function() {
+
+                //     var particleGeometry = new THREE.SphereBufferGeometry( .25, 16, 8 );
+                //     var vertexShader = document.getElementById( 'vertexShader2' ).textContent;
+                //     var fragmentShader = document.getElementById( 'fragmentShader2' ).textContent;
+                //     // var uniforms = {
+                //     //     topColor: { value: new THREE.Color( 0x202040 ) },
+                //     //     bottomColor: { value: new THREE.Color( 0x543864 ) },
+                //     //     offset: { value: 100 },
+                //     //     exponent: { value: 2 }
+                //     // };
+                    
+                //     var particleMat = new THREE.RawShaderMaterial( {
+                //         uniforms: this.particleUniforms,
+                //         vertexShader: vertexShader,
+                //         fragmentShader: fragmentShader,
+                //         transparent: true,
+                        
+                //     });
+                //     this.particleMesh = new THREE.Mesh( particleGeometry, particleMat );
+                //     this.particleMesh.position.set(5, this.exhaustOffset.y, 0);
+                //     this.mesh.add(this.particleMesh);
+
+                // }
+                // this.createExhaustParticle = function() {
+                //     var origin = this.exhaustLight.position;
+                //     var randomAngle = (2*Math.PI)*Math.random();
+                //     /**
+                //      *   x = cx + r * cos(a)
+                //      *   y = cy + r * sin(a)
+                //      *   Where r is the radius, cx,cy the origin, and a the angle
+                //      */
+                //     var x = origin.x + this.particleSpawnRadius * Math.cos(randomAngle);
+                //     var z = origin.z + this.particleSpawnRadius * Math.sin(randomAngle);
+                //     var particle = {
+                //         position: {
+                //             x: x,
+                //             y: origin.y,
+                //             z: z
+                //         },
+                //         lifespan: 0,
+                //         delay: Math.random(),
+                //         maxDist: this.particleMaxDist * Math.random(),
+                //     };
+                //     this.particlesArr.push(particle);
+                // }
+                // this.createExhaustParticleMesh = function(particle) {
+                //     // var geometry = new THREE.SphereGeometry( .2, 6, 6 );
+                //     // var material = new THREE.MeshLambertMaterial( {color: 0xf58819} );
+
+                //     // var positions = [
+                //     //     particle.position.x,
+                //     //     particle.position.y,
+                //     //     particle.position.z
+                //     // ];
+                //     var geometry = new THREE.SphereBufferGeometry( .25, 16, 8 );
+                //     // geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( positions, 3 ) );
+                //     var vertexShader = document.getElementById( 'vertexShader2' ).textContent;
+                //     var fragmentShader = document.getElementById( 'fragmentShader2' ).textContent;
+                //     var material = new THREE.RawShaderMaterial( {
+                //         uniforms: this.particleUniforms,
+                //         vertexShader: vertexShader,
+                //         fragmentShader: fragmentShader,
+                //         transparent: true
+                //     });
+
+                //     var mesh = new THREE.Mesh( geometry, material );
+                //     mesh.position.set(particle.position.x, particle.position.y, particle.position.z);
+                //     return mesh;
+                // }
+            }
+
+            function bufferSpherePositions() {
+                var geometry = new THREE.SphereBufferGeometry( .25, 6, 6 );
+                console.log(geometry);
+                var material = new THREE.MeshBasicMaterial();
+                var mesh = new THREE.Mesh(geometry, material);
+                scene.add(mesh);
+                console.log(mesh);
+                return mesh.geometry.attributes.position.array;
+            }
+            
+
+            function createMeteorSystem(scene) {
+                var innerRadius = 40;
+                var outerRadius = 120;
+                var thetaSegments = 32;
+                var phiSegments = 4;
+                var numberOfRings = 3;
+                var meteorsPerRing = 20;
+                var ringPosition = {
+                    x: 80,
+                    y: 0,
+                    z: 0
+                };
+                var ringZInc = -40;
+                var ringRadiusInc = 40;
+                var ringProps = {
+                    transparent: true,
+                    opacity: 0,
+                    side: THREE.DoubleSide,
+                    wireframe: true 
+                };
+                var rings = [];
+                for (var i = 0; i < numberOfRings; i++) {
+                    var ringGeometry = new THREE.RingGeometry(innerRadius, outerRadius, thetaSegments, phiSegments);
+                    var ringMaterial = new THREE.MeshBasicMaterial(ringProps);
+                    var ringMesh = new THREE.Mesh(ringGeometry, ringMaterial);
+                    ringMesh.position.set(ringPosition.x, ringPosition.y, ringPosition.z);
+                    scene.add(ringMesh);
+                    rings.push(ringMesh);
+                    var verts = ringMesh.geometry.vertices;
+                    var ringMeteorPositions = [];
+                    for (var j = 0; j < meteorsPerRing; j++) {
+                        var vertIndex = Math.round(Math.random()*verts.length); 
+                        vert = verts[vertIndex];
+
+                        while (!checkMeteorPosition(vert, ringMeteorPositions)) {
+                            vertIndex = Math.round(Math.random()*verts.length); 
+                            vert = verts[vertIndex];
+                        }
+                        if (vert !== undefined) {
+                            ringMeteorPositions.push(vert);
+                            var meteor = new Meteor();
+                            meteor.setPosition(vert.x, vert.y, vert.z);
+                            ringMesh.add(meteor.create());
+                            meteors.push(meteor);
+                        }
+                    }
+
+                    meteorsPerRing += 10;
+                    ringPosition.z += ringZInc;
+                    outerRadius += ringRadiusInc;
+                }
+                return rings;
+            }
+            function checkMeteorPosition(vert, vertsArr) {
+                var minDist = 12;
+                if (vertsArr.length <= 0) return true;
+                for (var v = 0; v < vertsArr.length; v++) {
+                    if (vert instanceof THREE.Vector3) {
+                        var dist = vert.distanceTo(vertsArr[v]);
+                        if (dist < minDist) return false;
+                    }
+                }
+                return true;
+            }
+
+            var Meteor = function() {
+                this.mesh = undefined;
+                this.position = {
+                    x: 0,
+                    y: 0,
+                    z: 0
+                };
+                this.minRadius = .3;
+                this.maxRadius = 1.5;
+                this.radius = (Math.random()*(this.maxRadius-this.minRadius))+this.minRadius;
+                this.shapes = [
+                    new THREE.DodecahedronGeometry(this.radius, 0),
+                    new THREE.IcosahedronGeometry(this.radius, 0),
+                    new THREE.OctahedronGeometry(this.radius, 0)
+                ];
+                this.setPosition = function(x, y, z) {
+                    this.position.x = x;
+                    this.position.y = y;
+                    this.position.z = z;
+                }
+                this.create = function() {
+                    var randomIndex = Math.round((Math.random()*20)/10);
+                    var meteorGeo = this.shapes[randomIndex];
+                    var meteorMat = new THREE.MeshLambertMaterial( {color: meteorColor} );
+                    this.mesh = new THREE.Mesh(meteorGeo, meteorMat);
+                    this.mesh.castShadow = true;
+                    this.mesh.position.set(this.position.x, this.position.y, this.position.z);
+                    return this.mesh;
+                }
+                this.update = function() {
+                    this.mesh.rotation.z += .015;
+                    this.mesh.rotation.x += .015;
+                }
+            }
+            function addCamera() {
+                /**
+                 * create orbit controls and camera
+                 */
+                camera = new THREE.PerspectiveCamera( 40, window.innerWidth / window.innerHeight, 1, 800 );
+				controls = new THREE.OrbitControls( camera, renderer.domElement );
+				controls.minDistance = 10;
+				controls.maxDistance = 1000;
+				// controls.maxPolarAngle = Math.PI / 2;
+                camera.position.z = 20;
+				// camera.position.y = controls.target.y + 2000;
+				// camera.position.x = 2000;
+				controls.update();
+            }
+
+            function initEvents() {
 				// Events
-                container.addEventListener( 'mousemove', onMouseMove, false );
+                // container.addEventListener( 'mousemove', onMouseMove, false );
 				window.addEventListener( 'resize', onWindowResize, false );
 
                 // key controls
@@ -196,186 +867,27 @@
                       moveLeft = true;
                     }
                 });
-        
 
                 // key controls
-        window.addEventListener('keyup', function(event) {
-          if(event.key ===  'w' || event.code === 'KeyW'){
-            moveForward = false;
-          }
-          if(event.key === 's' || event.code === 'KeyS'){
-            moveBackward = false;
-          }
-          if(event.key === 'd' || event.code === 'KeyD'){
-            moveRight = false;
-          }
-          if(event.key === 'a' || event.code === 'KeyA'){
-            moveLeft = false;
-          }
-        });
-
-			}
-			function onWindowResize() {
-				camera.aspect = window.innerWidth / window.innerHeight;
-				camera.updateProjectionMatrix();
-				renderer.setSize( window.innerWidth, window.innerHeight );
-			}
-
-
-
-
-			function animate() {
-				requestAnimationFrame( animate );
-				render();
-
-                delta = clock.getDelta();
-               
-                // var interval = .5; // seconds 
-                // elapsed += delta;
-                // if(elapsed > interval) {
-                //     elapsed -= interval;
-                //     console.log('interval hit');
-                // }
-                // var roundedElapsedTime = Math.floor(clock.getElapsedTime());
-
-                // animate pipes 
-                pipes.forEach(function(pipe) {
-                    pipe.draw();
+                window.addEventListener('keyup', function(event) {
+                  if(event.key ===  'w' || event.code === 'KeyW'){
+                    moveForward = false;
+                  }
+                  if(event.key === 's' || event.code === 'KeyS'){
+                    moveBackward = false;
+                  }
+                  if(event.key === 'd' || event.code === 'KeyD'){
+                    moveRight = false;
+                  }
+                  if(event.key === 'a' || event.code === 'KeyA'){
+                    moveLeft = false;
+                  }
                 });
-
-
-
-
-
-
-                // ball movement controlled by player
-                velocity.x *= friction;
-                velocity.z *= friction;
-                if(moveForward){
-                  // sphere.position.x -= movementSpeed*delta;
-                  velocity.x -= acceleration * delta;
-                }
-                if(moveBackward){
-                  // sphere.position.x += movementSpeed*delta;
-                  velocity.x += acceleration * delta;
-                }
-                if(moveRight){
-                  // sphere.position.z -= movementSpeed*delta;
-                  velocity.z -= acceleration * delta;
-                }
-                if(moveLeft){
-                  velocity.z += acceleration * delta;
-                }
-                sphere.position.x += velocity.x;
-                sphere.position.z += velocity.z;
-
-				stats.update();
-			}
-			function render() {
-				renderer.render( scene, camera );
-			}
-			function onMouseMove( event ) {
-				mouse.x = ( event.clientX / renderer.domElement.clientWidth ) * 2 - 1;
-				mouse.y = - ( event.clientY / renderer.domElement.clientHeight ) * 2 + 1;
-				raycaster.setFromCamera( mouse, camera );
-				// See if the ray from the camera into the world hits one of our meshes
-				var intersects = raycaster.intersectObject( mesh );
-				// Toggle rotation bool for meshes that we clicked
-				if ( intersects.length > 0 ) {
-					helper.position.set( 0, 0, 0 );
-					helper.lookAt( intersects[ 0 ].face.normal );
-					helper.position.copy( intersects[ 0 ].point );
-				}
-			}
-
-            function addPipe() {
-                pipes.push(new Pipe());
             }
 
-            function Pipe() {
-                this.start = false;
-                this.position = new THREE.Vector3();
-                this.color = undefined;
-                this.interval = .5; // seconds 
-                this.constraints = {
-                    maxX: 500,
-                    minX: -500,
-                    maxY: 500,
-                    minY: -500,
-                    maxZ: 500,
-                    mini: -500,
-                };
-                this.randColor = function() {
-                    var index = Math.floor(Math.random()*pipeColors.length);
-                    return pipeColors[index];
-                }
-                this.randPosition = function() {
-                    var x = Math.floor((Math.random() * this.constraints.maxX*2) + this.constraints.minX);
-                    var y = Math.floor((Math.random() * this.constraints.maxY*2) + this.constraints.minY);
-                    var z = Math.floor((Math.random() * this.constraints.maxZ*2) + this.constraints.minZ);
-                    return new THREE.Vector3(x,y,z);
-                }
-                this.createJoint = function() {
-                    var geometry = new THREE.SphereBufferGeometry( 5, 32, 32 );
-                    var material = new THREE.MeshLambertMaterial( {color: this.color} );
-                    var sphere = new THREE.Mesh( geometry, material );
-                    // sphere.position.set(10, 40, 30);
-                    sphere.position.add(this.position);
-                    sphere.castShadow = true;
-                    scene.add( sphere );
-                }
-                this.createSegment = function() {
-                    // var direction = new THREE.Vector3(0, magnitude, 0);
-                    // var position = this.position.clone();
-                    // var v1 = position;
-                    // var v2 = this.position.add(direction);
-                    // var path1  = new THREE.LineCurve3(v1, v2);
-                    // var path2  = new THREE.LineCurve3(new THREE.Vector3(100, 60, 10), new THREE.Vector3(100, 140, 60));
-                    // var path3  = new THREE.LineCurve3(new THREE.Vector3(300, 20, 20), new THREE.Vector3(-70, -200, 0));
-                    // pipe.curves = [path1, path2, path3];
-
-
-                    // rotate around x axis
-                    // x, ycosθ - zsinθ, ysinθ + zcosθ
-
-                    // rotate around y axis
-                    // xcosθ + zsinθ, y, -xsinθ + zcosθ 
-                    
-                    // rotate around z axis
-                    // xcosθ - ysinθ, xsinθ + ycosθ, z
-
-                    var magnitude = 100;
-                    var pipe = new THREE.CurvePath();
-                    var geometry = new THREE.TubeGeometry(pipe, 20, 2, 8, false);
-                    var material = new THREE.MeshLambertMaterial({color: 0x00ff00});
-                    var mesh = new THREE.Mesh(geometry, material);
-                    mesh.castShadow = true;
-                    console.log(mesh);
-                    scene.add(mesh);
-                    // scene.add(segment);
-                }
-                this.draw = function() {
-                    if (!this.start) return;
-                    elapsed += delta;
-                    if(elapsed > this.interval) {
-                        elapsed -= this.interval;
-                        this.createSegment();
-                        // this.createJoint();
-                        // console.log('interval hit');
-                    }
-                }
-                this.init = function() {
-                    // random color 
-                    this.color = this.randColor();
-                    
-                    // random starting position
-                    this.position = this.randPosition();
-
-                    // start drawing
-                    this.start = true;
-                }
-                this.init();
-            };
+            init();
+			animate();
+          
 
 		</script>
 
