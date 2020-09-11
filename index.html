@@ -163,7 +163,7 @@
 				container = document.getElementById( 'container' );
 				container.innerHTML = "";
 				renderer = new THREE.WebGLRenderer( { antialias: true } );
-				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setPixelRatio( window.devicePixelRatio * 1.5);
 				renderer.setSize( window.innerWidth, window.innerHeight );
                 renderer.shadowMap.enabled = true;
                 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -230,7 +230,7 @@
                 spaceship = new Spaceship();
                 spaceship.create();
 
-                var meteorSystem = new MeteorSystem();
+                meteorSystem = new MeteorSystem();
                 meteorSystem.init();
 
                 // var meteor = new Meteor();
@@ -276,6 +276,9 @@
                 // for (var m = 0; m < meteors.length; m++) {
                 //     meteors[m].update();
                 // }
+                if (meteorSystem !== undefined) {
+                    meteorSystem.update();
+                }
 
                 if (spaceship !== undefined) {
                     spaceship.update(clock.getElapsedTime());
@@ -350,12 +353,12 @@
 
                 // Exhaust Particle Properties
                 this.particles = undefined; // particles mesh
-                this.particleInstances = 100;
+                this.particleInstances = 120;
                 this.particleVelocity = .125;
                 this.particleSpawnRadius = .2;
                 this.particleMaxDist = 5;
                 this.particleMinDist = 7;
-                this.particleScaleMult = 2;
+                this.particleScaleMult = 2.75;
                 this.particleUniforms = {
                     time: { value: 1.0 },
                 };
@@ -583,10 +586,21 @@
                         var y = this.height - ((this.height * 2) * Math.random());
                         var position = new THREE.Vector3(x, y, z);
                         var meteor = new Meteor(position);
+                        meteor.set('minY', this.height/-2);
+                        meteor.set('maxY', this.height/2);
                         this.mesh.add(meteor.create());
                         this.meteors.push(meteor);
                     }
                     scene.add(this.mesh);
+                }
+
+                this.update = function() {
+                    console.log('hello');
+
+                    for (var m = 0; m < this.meteors.length; m++) {
+                        var meteor = this.meteors[m];
+                        meteor.update();
+                    }
                 }
             }
 
@@ -596,11 +610,9 @@
                 this.minRadius = .3;
                 this.maxRadius = 1;
                 this.radius = (Math.random() * (this.maxRadius - this.minRadius)) + this.minRadius;
-                // this.setPosition = function(x, y, z) {
-                //     this.position.x = x;
-                //     this.position.y = y;
-                //     this.position.z = z;
-                // }
+                this.velocity = .15;
+                this.maxY = 10;
+                this.minY = -10;
                 this.create = function() {
                     var geometry = new THREE.DodecahedronGeometry(this.radius, 0);
                     var material = new THREE.MeshLambertMaterial( {color: meteorColor} );
@@ -615,9 +627,16 @@
                     this.mesh.geometry.needsUpdate = true;
                     return this.mesh;
                 }
+                this.set = function(property, value) {
+                    this[property] = value;
+                }
                 this.update = function() {
                     this.mesh.rotation.z += .015;
                     this.mesh.rotation.x += .015;
+                    this.mesh.position.y -= this.velocity;
+                    if (this.mesh.position.y <= this.minY) {
+                        this.mesh.position.y = this.maxY;
+                    }
                 }
             }
 
