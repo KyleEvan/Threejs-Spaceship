@@ -231,8 +231,8 @@
                 spaceship = new Spaceship();
                 spaceship.create();
 
-                meteorSystem = new MeteorSystem();
-                meteorSystem.init();
+                // meteorSystem = new MeteorSystem();
+                // meteorSystem.init();
 
                 
                 // var meteor = new Meteor();
@@ -361,11 +361,11 @@
                 // Exhaust Particle Properties
                 this.particles = undefined; // particles mesh
                 this.particleInstances = 50;
-                this.particleVelocity = .175;
+                this.particleVelocity = .105;
                 this.particleSpawnRadius = .12;
-                this.particleMaxDist = 5;
-                this.particleMinDist = 7;
-                this.particleScaleMult = 3.25;
+                this.particleMaxDist = 4;
+                this.particleMinDist = 3.2;
+                this.particleScaleMult = 2.00;
                 this.particleUniforms = {
                     time: { value: 1.0 },
                 };
@@ -405,9 +405,10 @@
                         var x = p;
                         var y = p + 1;
                         var z = p + 2;
-                        
-                        positions[y] -= this.particleVelocity;
+
                         var dist = this.exhaustOffset.y - positions[y];
+                        var friction = (1 - (maxDists[i] - dist))*.02;
+                        positions[y] -= this.particleVelocity - friction;
 
                         // If particle reaches max distance, reset its position and size
                         if (dist > maxDists[i]) {
@@ -649,33 +650,42 @@
             var Star = function() {
                 this.create = function() {
                     var cameraPos = camera.position.clone();
-                    cameraPos.normalize();
-                    var cameraTar = cameraTarget.normalize();
                     console.log(cameraPos);
-                    console.log(cameraTar);
 
-                    var cameraDirection = new THREE.Vector3(cameraPos.x - cameraTar.x, cameraPos.y - cameraTar.y, cameraPos.z - cameraTar.z);
-                    var angle = .12 * Math.PI; // 45 degrees
-                    var adjacent = 30;
+                    // cameraPos.normalize();
+                    // var cameraTar = cameraTarget.normalize();
+                    var endpoint = cameraPos.multiplyScalar(-1);
 
-                    var opposite = Math.tan(angle) * adjacent;
-                    var x = opposite * Math.random();
-                    var y = opposite * Math.random();
-                    var z = camera.position.z - adjacent;
+                    var spheregeometry = new THREE.SphereGeometry( 1, 6, 6 );
+                    var spherematerial = new THREE.MeshLambertMaterial( {color: 0xffffff} );
+                    var mesh = new THREE.Mesh( spheregeometry, spherematerial );
+                    mesh.position.set(endpoint.x, endpoint.y, endpoint.z);
+                    scene.add(mesh);
+                    console.log(endpoint);
 
-                    var start = new THREE.Vector3(x, y, z);
-                    // start.applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI/2);
-                    // start = cameraPos.sub(start);
-                    // var end = start.clone().multiplyScalar(.5);
-                    var end = new THREE.Vector3(y, x, z);
-                    // var end = new THREE.Vector3
+
+                    // var cameraDirection = new THREE.Vector3(cameraPos.x - cameraTar.x, cameraPos.y - cameraTar.y, cameraPos.z - cameraTar.z);
+                    // var angle = .12 * Math.PI; // 45 degrees
+                    // var adjacent = 30;
+
+                    // var opposite = Math.tan(angle) * adjacent;
+                    // var x = opposite * Math.random();
+                    // var y = opposite * Math.random();
+                    // var z = camera.position.z - adjacent;
+
+                    // var start = new THREE.Vector3(x, y, z);
+                    // // start.applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI/2);
+                    // // start = cameraPos.sub(start);
+                    // // var end = start.clone().multiplyScalar(.5);
+                    // var end = new THREE.Vector3(y, x, z);
+                    // // var end = new THREE.Vector3
                     
-                    var points = [start, end];
-                    var lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
-                    // lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
-                    var lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
-                    var line = new THREE.Line(lineGeometry, lineMaterial);
-                    scene.add(line);
+                    // var points = [start, end];
+                    // var lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+                    // // lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+                    // var lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+                    // var line = new THREE.Line(lineGeometry, lineMaterial);
+                    // scene.add(line);
                 }
             }
 
@@ -688,7 +698,10 @@
 				controls.minDistance = 10;
 				controls.maxDistance = 1000;
 				// controls.maxPolarAngle = Math.PI / 2;
-                camera.position.z = 20;
+                camera.position.x = 10;
+                camera.position.y = -10;
+                camera.position.z = 30;
+                
 				// camera.position.y = controls.target.y + 2000;
 				// camera.position.x = 2000;
 				controls.update();
